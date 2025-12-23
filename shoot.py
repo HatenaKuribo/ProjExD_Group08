@@ -572,7 +572,7 @@ CHAR_LIST = [
     {"name": "Type D: Reimu", "desc": "誘導弾幕", "color": WHITE, "class": PlayerReimu},
     {"name": "Type E: Switch", "desc": "射撃切替", "color": YELLOW, "class": PlayerSwitch},
     {"name": "Type F: Charge", "desc": "チャージ攻撃", "color": CYAN, "class" :PlayerCharge},
-    {"name": "Type G: Melee",   "desc": "近接斬撃(弾消し)", "color": YELLOW, "class": PlayerMelee},
+    {"name": "Type G: Melee",   "desc": "近接斬撃(弾消し)", "color": CYAN, "class": PlayerMelee},
     # 例: {"name": "Type D: Power", "desc": "高火力", "color": PURPLE, "class": PlayerPower}, 
 ]
 
