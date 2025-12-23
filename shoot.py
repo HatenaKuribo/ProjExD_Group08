@@ -139,7 +139,7 @@ class PlayerShotgun(Player):
     def shoot(self):
         now = pygame.time.get_ticks()
         if now - self.last_shot_time > self.shoot_interval:
-            bullet_angles = [-40, -20, 0, 20, 40]
+            bullet_angles = [-20, -10, 0, 10, 20]
             for angle in bullet_angles:
                 rad = math.radians(angle)
                 b_speed = 12
