@@ -33,15 +33,27 @@ os.chdir(os.path.dirname(os.path.abspath(__file__)))
 # --- クラス定義 ---
 
 class Bullet(pygame.sprite.Sprite):
-    """弾クラス"""
-    def __init__(self, x, y, vy, vx=0, is_player_bullet=True, color=WHITE):
+    """
+    弾クラス
+    自機と敵の弾を共通で管理
+    """
+    def __init__(self, x:float, y:float, vy:float, vx:float=0, is_player_bullet:bool=True, color:tuple=WHITE) -> None:
+        """
+        弾の設定
+        引数 x,y: 弾の座標
+        引数 vx,vy: 弾の速度
+        引数 is_player_bullet: プレイヤーの弾かどうか
+        引数 color: 弾の色
+        """
         super().__init__()
         size = 10 if is_player_bullet else 8
         self.image = pygame.Surface((size, size))
         
         if is_player_bullet:
+            # プレイヤー弾は引数で色を指定可能にする
             self.image.fill(color)
         else:
+            # 敵弾は赤玉
             pygame.draw.circle(self.image, RED, (size//2, size//2), size//2)
             self.image.set_colorkey(BLACK)
 
@@ -50,7 +62,10 @@ class Bullet(pygame.sprite.Sprite):
         self.vy = vy
         self.vx = vx
 
-    def update(self):
+    def update(self) -> None:
+        """
+        弾の移動処理と画面外削除
+        """
         self.rect.y += self.vy
         self.rect.x += self.vx
         if self.rect.bottom < -50 or self.rect.top > SCREEN_HEIGHT + 50 or \
@@ -58,8 +73,13 @@ class Bullet(pygame.sprite.Sprite):
             self.kill()
 
 class Player(pygame.sprite.Sprite):
-    """自機の親クラス（共通機能）"""
-    def __init__(self):
+    """
+    自機の親クラス（共通機能）
+    """
+    def __init__(self) -> None:
+        """
+        自機の共通機能の設定
+        """
         super().__init__()
         self.image = pygame.Surface((30, 30)) 
         self.rect = self.image.get_rect()
@@ -68,9 +88,13 @@ class Player(pygame.sprite.Sprite):
         self.last_shot_time = 0
         self.shoot_interval = 80
     
-    def update(self):
+    def update(self) -> None:
+        """
+        自機の移動処理の設定
+        """
         keys = pygame.key.get_pressed()
         current_speed = self.speed
+        # Shiftキーで低速移動
         if keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]:
             current_speed = self.speed / 2
 
@@ -83,20 +107,32 @@ class Player(pygame.sprite.Sprite):
         if keys[pygame.K_DOWN] and self.rect.bottom < SCREEN_HEIGHT:
             self.rect.y += current_speed
 
-    def shoot(self):
+    def shoot(self) -> None:
+        """
+        子クラスでオーバーライド（上書き）するためのメソッド
+        """
         pass
 
 class PlayerBalance(Player):
-    """Type A: バランス型"""
-    def __init__(self):
+    """
+    Type A: バランス型(青)
+    """
+    def __init__(self) -> None:
+        """
+        バランス型の各種設定
+        """
         super().__init__()
         self.image.fill(BLUE)
         self.speed = 5
         self.shoot_interval = 80
 
-    def shoot(self):
+    def shoot(self) -> None:
+        """
+        バランス型の射撃機構
+        """
         now = pygame.time.get_ticks()
         if now - self.last_shot_time > self.shoot_interval:
+            # 3WAY弾 (シアン)
             bullet_centers = [0, -15, 15]
             for angle in bullet_centers:
                 rad = math.radians(angle)
@@ -108,16 +144,25 @@ class PlayerBalance(Player):
             self.last_shot_time = now
 
 class PlayerSpeed(Player):
-    """Type B: 高速移動型"""
-    def __init__(self):
+    """
+    Type B: 高速移動型（赤）
+    """
+    def __init__(self) -> None:
+        """
+        高速移動型の各種設定
+        """
         super().__init__()
         self.image.fill(RED)
         self.speed = 8
         self.shoot_interval = 80 
 
-    def shoot(self):
+    def shoot(self) -> None:
+        """
+        高速移動型の射撃機構
+        """
         now = pygame.time.get_ticks()
         if now - self.last_shot_time > self.shoot_interval:
+            # 3WAY弾 (少し赤い白)
             bullet_centers = [0, -15, 15] 
             for angle in bullet_centers:
                 rad = math.radians(angle)
@@ -129,14 +174,22 @@ class PlayerSpeed(Player):
             self.last_shot_time = now
 
 class PlayerShotgun(Player):
-    """Type C: ショットガン型"""
-    def __init__(self):
+    """
+    Type C: ショットガン型
+    """
+    def __init__(self) -> None:
+        """
+        ショットガン型の各種設定
+        """
         super().__init__()
         self.image.fill(GREEN)
         self.speed = 4
         self.shoot_interval = 200
 
-    def shoot(self):
+    def shoot(self) -> None:
+        """
+        ショットガン型の射撃機構
+        """
         now = pygame.time.get_ticks()
         if now - self.last_shot_time > self.shoot_interval:
             bullet_angles = [-20, -15, -10, -5, 0, 5, 10, 15, 20]
@@ -145,7 +198,7 @@ class PlayerShotgun(Player):
                 b_speed = 12
                 vx = math.sin(rad) * b_speed
                 vy = -math.cos(rad) * b_speed
-                bullet = Bullet(self.rect.centerx, self.rect.top, vy, vx, is_player_bullet=True, color=YELLOW)
+                bullet = Bullet(self.rect.centerx, self.rect.top, vy, vx, is_player_bullet=True, color=GREEN)
                 all_sprites.add(bullet)
                 player_bullets.add(bullet)
             self.last_shot_time = now
@@ -162,15 +215,7 @@ class PlayerReimu(Player):
         機体の色や速度、弾の連射速度を初期化する。
         """
         super().__init__()
-        # --- 紅白デザインへの変更点 ---
-        self.image.fill(WHITE) # まず全体を白（上着の色）にする
-        
-        # 下半分を赤（袴の色）で塗りつぶす
-        # Rect(x, y, width, height) -> (0, 15, 30, 15)
-        # 画像サイズが30x30なので、y=15から下が下半分
-        # pygame.draw.rect(self.image, (200, 50, 50), (0, 15, 30, 15))
-        
-        
+        self.image.fill(WHITE)
         self.speed: int = 5            # 標準速度
         self.shoot_interval: int = 120 # 誘導弾は強力なので連射は遅めに設定
 
@@ -257,6 +302,47 @@ class PlayerReimu(Player):
         return nearest_enemy
     
 
+class PlayerSwitch(Player):
+    """
+    Type C: 射撃モード切替型
+    """
+    def __init__(self) -> None:
+        """
+        射撃モード切替型の各種設定
+        """
+        super().__init__()
+        self.image.fill(YELLOW)
+        self.speed = 5
+        self.shoot_mode = 2 # 2wayスタート
+        self.last_toggle_time = 0 # 連打防止
+
+    def shoot(self) -> None:
+        """
+        射撃モード切替型の射撃機構
+        """
+        now = pygame.time.get_ticks()
+        self.shoot_interval = 80 if self.shoot_mode == 2 else 20
+        if now - self.last_shot_time > self.shoot_interval:
+            bullet_centers = [-10, 10] if self.shoot_mode == 2 else [0]
+            for angle in bullet_centers:
+                rad = math.radians(angle)
+                vx = math.sin(rad) * 10
+                vy = -math.cos(rad) * 10
+                bullet = Bullet(self.rect.centerx, self.rect.top, vy, vx, is_player_bullet=True, color=YELLOW)
+                all_sprites.add(bullet)
+                player_bullets.add(bullet)
+            self.last_shot_time = now
+        
+    def toggle_mode(self) -> None:
+        """
+        射撃モード切替型専用
+        Xキーで射撃モード切替
+        """
+        now = pygame.time.get_ticks()
+        if now -self.last_toggle_time > 300: # 0.3秒クールタイム
+            self.shoot_mode = 1 if self.shoot_mode == 2 else 2
+            self.last_toggle_time = now
+
 # ★★★ キャラクターリストの定義 ★★★
 # ここに辞書を追加していくだけで、選択肢が増えます
 CHAR_LIST = [
@@ -264,13 +350,21 @@ CHAR_LIST = [
     {"name": "Type B: Speed",   "desc": "高速移動型", "color": RED,   "class": PlayerSpeed},
     {"name": "Type C: Shotgun", "desc": "広範囲攻撃", "color": GREEN, "class": PlayerShotgun},
     {"name": "Type D: Reimu", "desc": "誘導弾幕", "color": WHITE, "class": PlayerReimu},
+    {"name": "Type E: Switch", "desc": "射撃切替", "color": YELLOW, "class": PlayerSwitch},
     # 例: {"name": "Type D: Power", "desc": "高火力", "color": PURPLE, "class": PlayerPower}, 
 ]
 
 
 class Enemy(pygame.sprite.Sprite):
-    """ザコ敵クラス"""
-    def __init__(self, enemy_type):
+    """
+    ザコ敵クラス
+    タイプに応じて動作を変更
+    """
+    def __init__(self, enemy_type:int) -> None:
+        """
+        敵の設定
+        引数 enemy_type: 敵のタイプの種類
+        """
         super().__init__()
         self.enemy_type = enemy_type
         self.image = pygame.Surface((30, 30))
@@ -291,7 +385,10 @@ class Enemy(pygame.sprite.Sprite):
         self.rect.x = random.randrange(0, SCREEN_WIDTH - self.rect.width)
         self.rect.y = -50
 
-    def update(self):
+    def update(self) -> None:
+        """
+        敵の挙動処理
+        """
         self.rect.y += self.speed_y
 
         if self.enemy_type == ENEMY_TYPE_WAVY:
@@ -306,8 +403,11 @@ class Enemy(pygame.sprite.Sprite):
         if self.rect.top > SCREEN_HEIGHT:
             self.kill()
 
-    def shoot_at_player(self):
-        if player: 
+    def shoot_at_player(self) -> None:
+        """
+        プレイヤーに狙い撃ちする弾を発射
+        """
+        if player: # プレイヤーが存在する場合のみ
             dx = player.rect.centerx - self.rect.centerx
             dy = player.rect.centery - self.rect.centery
             angle = math.atan2(dy, dx)
@@ -319,9 +419,14 @@ class Enemy(pygame.sprite.Sprite):
             enemy_bullets.add(bullet)
 
 class Boss(pygame.sprite.Sprite):
-
-    """ボスクラス"""
-    def __init__(self, level=1):
+    """
+    ボスクラス
+    """
+    def __init__(self, level:int=1) -> None:
+        """
+        ボスの設定
+        引数 level: ボスのレベル(HPや弾幕の強度に影響)
+        """
         super().__init__()
         self.image = pygame.Surface((60, 60))
         self.image.fill(PURPLE)
@@ -334,7 +439,10 @@ class Boss(pygame.sprite.Sprite):
         self.angle = 0
         self.timer = 0
 
-    def update(self):
+    def update(self) -> None:
+        """
+        ボスの行動更新
+        """
         if self.state == "entry":
             self.rect.y += 2
             if self.rect.y >= 100:
@@ -347,7 +455,10 @@ class Boss(pygame.sprite.Sprite):
             if self.timer % 5 == 0:
                 self.shoot_danmaku()
 
-    def shoot_danmaku(self):
+    def shoot_danmaku(self) -> None:
+        """
+        回転弾幕を発射
+        """
         self.angle += 12
         bullet_speed = 4
         for i in range(0, 360, 90):
@@ -359,15 +470,13 @@ class Boss(pygame.sprite.Sprite):
             enemy_bullets.add(bullet)
 
 
-
-    
-
 # --- 3. ゲーム初期化 ---
 pygame.init()
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 pygame.display.set_caption("シューティング")
 clock = pygame.time.Clock()
 
+# フォント設定
 try:
     font = pygame.font.SysFont("meiryo", 40)
     small_font = pygame.font.SysFont("meiryo", 24)
@@ -375,13 +484,14 @@ except:
     font = pygame.font.Font(None, 40)
     small_font = pygame.font.Font(None, 24)
 
+# グループ作成
 all_sprites = pygame.sprite.Group()
 enemies = pygame.sprite.Group()
 boss_group = pygame.sprite.Group()
 player_bullets = pygame.sprite.Group()
 enemy_bullets = pygame.sprite.Group()
 
-player = None 
+player = None # プレイヤーインスタンス用
 
 # ゲーム変数
 score = 0
@@ -392,6 +502,7 @@ is_boss_active = False
 # ★インデックスで管理
 selected_char_idx = 0 
 
+# ゲーム状態定義
 GAME_STATE_TITLE = 0
 GAME_STATE_SELECT = 1
 GAME_STATE_PLAYING = 2
@@ -414,7 +525,7 @@ while running:
                 elif event.key == pygame.K_ESCAPE:
                     running = False
 
-        # ■ キャラ選択画面 (ここを大きく変更)
+        # ■ キャラ選択画面
         elif current_state == GAME_STATE_SELECT:
             if event.type == pygame.KEYDOWN:
                 # ★ 左キー: インデックスを一つ戻す（余り計算でループ）
@@ -445,7 +556,7 @@ while running:
                     is_boss_active = False
                     current_state = GAME_STATE_PLAYING
                 if event.key == pygame.K_ESCAPE:
-                    current_state = GAME_STATE_TITLE
+                    current_state = GAME_STATE_TITLE # 戻る
 
         # ■ ゲームオーバー画面
         elif current_state == GAME_STATE_GAMEOVER:
@@ -457,6 +568,8 @@ while running:
         keys = pygame.key.get_pressed()
         if keys[pygame.K_z]:
             player.shoot()
+        if isinstance(player, PlayerSwitch) and keys[pygame.K_x]:
+            player.toggle_mode()
 
         if not is_boss_active and score >= next_boss_score:
             is_boss_active = True
