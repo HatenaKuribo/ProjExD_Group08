@@ -18,6 +18,7 @@ BLUE = (0, 0, 255)
 YELLOW = (255, 255, 0)
 PURPLE = (128, 0, 128)
 CYAN = (0, 255, 255)
+PINK = (255, 130, 187)
 
 # 敵の種類
 ENEMY_TYPE_NORMAL = 0
@@ -479,7 +480,7 @@ class PlayerSwitch(Player):
                 rad = math.radians(angle)
                 vx = math.sin(rad) * 10
                 vy = -math.cos(rad) * 10
-                bullet = Bullet(self.rect.centerx, self.rect.top, vy, vx, is_player_bullet=True, color=YELLOW)
+                bullet = Bullet(self.rect.centerx, self.rect.top, vy, vx, is_player_bullet=True, color=PINK)
                 all_sprites.add(bullet)
                 player_bullets.add(bullet)
             self.last_shot_time = now
@@ -553,7 +554,7 @@ class PlayerCharge(Player):
 
             # 見た目強化（サイズ変更）
                 bullet.image = pygame.Surface((size, size))
-                bullet.image.fill(YELLOW)
+                bullet.image.fill(CYAN)
                 bullet.rect = bullet.image.get_rect(center=bullet.rect.center)
 
                 all_sprites.add(bullet)
@@ -570,9 +571,9 @@ CHAR_LIST = [
     {"name": "Type B: Speed",   "desc": "高速移動型", "color": RED,   "class": PlayerSpeed},
     {"name": "Type C: Shotgun", "desc": "広範囲攻撃", "color": GREEN, "class": PlayerShotgun},
     {"name": "Type D: Reimu", "desc": "誘導弾幕", "color": WHITE, "class": PlayerReimu},
-    {"name": "Type E: Switch", "desc": "射撃切替", "color": YELLOW, "class": PlayerSwitch},
+    {"name": "Type E: Switch", "desc": "射撃切替", "color": PINK, "class": PlayerSwitch},
     {"name": "Type F: Charge", "desc": "チャージ攻撃", "color": CYAN, "class" :PlayerCharge},
-    {"name": "Type G: Melee",   "desc": "近接斬撃(弾消し)", "color": CYAN, "class": PlayerMelee},
+    {"name": "Type G: Melee",   "desc": "近接斬撃(弾消し)", "color": YELLOW, "class": PlayerMelee},
     # 例: {"name": "Type D: Power", "desc": "高火力", "color": PURPLE, "class": PlayerPower}, 
 ]
 
