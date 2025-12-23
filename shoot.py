@@ -150,12 +150,120 @@ class PlayerShotgun(Player):
                 player_bullets.add(bullet)
             self.last_shot_time = now
 
+
+class PlayerReimu(Player):
+    """
+    Type C: 博麗霊夢風のホーミング（誘導）機体
+    最も近い敵を自動で索敵し、追尾する弾を発射する。
+    """
+    def __init__(self):
+        """
+        コンストラクタ
+        機体の色や速度、弾の連射速度を初期化する。
+        """
+        super().__init__()
+        # --- 紅白デザインへの変更点 ---
+        self.image.fill(WHITE) # まず全体を白（上着の色）にする
+        
+        # 下半分を赤（袴の色）で塗りつぶす
+        # Rect(x, y, width, height) -> (0, 15, 30, 15)
+        # 画像サイズが30x30なので、y=15から下が下半分
+        # pygame.draw.rect(self.image, (200, 50, 50), (0, 15, 30, 15))
+        
+        
+        self.speed: int = 5            # 標準速度
+        self.shoot_interval: int = 120 # 誘導弾は強力なので連射は遅めに設定
+
+    def shoot(self) -> None:
+        """
+        最も近い敵に向かって誘導弾を発射する。
+        敵がいない場合は真上に発射する。
+        """
+        now = pygame.time.get_ticks()
+        # 前回の発射から一定時間経過しているか確認
+        if now - self.last_shot_time > self.shoot_interval:
+            # 左右の少しズレた位置から2発発射するためのオフセット
+            offsets = [-15, 15]
+            for offset_x in offsets:
+                # 画面内で最も近い敵を取得するメソッドを呼ぶ
+                target: Enemy | None = self.get_nearest_enemy()
+                
+                angle: float = 0.0
+                if target:
+                    # 敵がいる場合：敵の方向への角度(ラジアン)を計算
+                    # atan2(yの差分, xの差分) で角度が求まる
+                    dx = target.rect.centerx - (self.rect.centerx + offset_x)
+                    dy = target.rect.centery - self.rect.top
+                    angle = math.atan2(dy, dx)
+                else:
+                    # 敵がいない場合：真上 (-90度 = -pi/2 ラジアン)
+                    angle = -math.pi / 2
+
+                # 弾速の設定 (ホーミング弾は挙動が見えやすいよう少し遅め)
+                speed: float = 8.0
+                vx: float = math.cos(angle) * speed # 横方向の速度成分
+                vy: float = math.sin(angle) * speed # 縦方向の速度成分
+                
+                # 弾の生成 (お札風の長方形)
+                bullet = Bullet(self.rect.centerx + offset_x, self.rect.top, vy, vx, is_player_bullet=True, color=(255, 50, 50))
+                # 弾の見た目を長方形（お札）に変更
+                bullet.image = pygame.Surface((10, 14))
+                bullet.image.fill(WHITE)           # 背景白
+                pygame.draw.rect(bullet.image, RED, (2, 2, 6, 10)) # 赤い枠線を描く
+                bullet.rect = bullet.image.get_rect(center=(self.rect.centerx + offset_x, self.rect.top))
+                
+                # スプライトグループに追加
+                all_sprites.add(bullet)
+                player_bullets.add(bullet)
+            
+            # 最終発射時間を更新
+            self.last_shot_time = now
+
+    def get_nearest_enemy(self) -> any:
+        """
+        現在画面内にいる敵の中から、自機に最も近い敵を探索して返す。
+        Returns:
+            Enemy | None: 最も近い敵インスタンス。敵がいない場合はNone。
+        """
+        nearest_enemy = None
+        min_dist_sq = float('inf') # 最短距離の記録用（初期値は無限大）
+        
+        # global変数のenemiesグループから探索
+        for enemy in enemies:
+            # まだ画面に出てきていない(y < 0)敵は対象外にする
+            if enemy.rect.top < 0:
+                continue
+
+            # 距離の二乗を計算 (ルート計算を避けて処理を高速化)
+            # 距離^2 = (x1-x2)^2 + (y1-y2)^2
+            dx = enemy.rect.centerx - self.rect.centerx
+            dy = enemy.rect.centery - self.rect.centery
+            dist_sq = dx*dx + dy*dy
+            
+            # これまでの最短距離より近ければ更新
+            if dist_sq < min_dist_sq:
+                min_dist_sq = dist_sq
+                nearest_enemy = enemy
+                
+        # ボス戦中はボスもターゲット候補にする
+        if is_boss_active:
+            for boss in boss_group:
+                 dx = boss.rect.centerx - self.rect.centerx
+                 dy = boss.rect.centery - self.rect.centery
+                 dist_sq = dx*dx + dy*dy
+                 if dist_sq < min_dist_sq:
+                     nearest_enemy = boss
+
+        return nearest_enemy
+    
+
 # ★★★ キャラクターリストの定義 ★★★
 # ここに辞書を追加していくだけで、選択肢が増えます
 CHAR_LIST = [
     {"name": "Type A: Balance", "desc": "バランス型", "color": BLUE,  "class": PlayerBalance},
     {"name": "Type B: Speed",   "desc": "高速移動型", "color": RED,   "class": PlayerSpeed},
     {"name": "Type C: Shotgun", "desc": "広範囲攻撃", "color": GREEN, "class": PlayerShotgun},
+    {"name": "Type D: Reimu", "desc": "誘導弾幕", "color": WHITE, "class": PlayerReimu},
     # 例: {"name": "Type D: Power", "desc": "高火力", "color": PURPLE, "class": PlayerPower}, 
 ]
 
@@ -251,113 +359,7 @@ class Boss(pygame.sprite.Sprite):
             enemy_bullets.add(bullet)
 
 
-class PlayerReimu(Player):
-    """
-    Type C: 博麗霊夢風のホーミング（誘導）機体
-    最も近い敵を自動で索敵し、追尾する弾を発射する。
-    """
-    def __init__(self):
-        """
-        コンストラクタ
-        機体の色や速度、弾の連射速度を初期化する。
-        """
-        super().__init__()
-        # --- 紅白デザインへの変更点 ---
-        self.image.fill(WHITE) # まず全体を白（上着の色）にする
-        
-        # 下半分を赤（袴の色）で塗りつぶす
-        # Rect(x, y, width, height) -> (0, 15, 30, 15)
-        # 画像サイズが30x30なので、y=15から下が下半分
-        pygame.draw.rect(self.image, (200, 50, 50), (0, 15, 30, 15))
-        
-        # （お好みで）中央に黄色いリボンっぽい点を入れるとさらに霊夢っぽくなります
-        # pygame.draw.rect(self.image, YELLOW, (12, 12, 6, 6))
-        # ---------------------------
-        
-        self.speed: int = 5            # 標準速度
-        self.shoot_interval: int = 120 # 誘導弾は強力なので連射は遅めに設定
 
-    def shoot(self) -> None:
-        """
-        最も近い敵に向かって誘導弾を発射する。
-        敵がいない場合は真上に発射する。
-        """
-        now = pygame.time.get_ticks()
-        # 前回の発射から一定時間経過しているか確認
-        if now - self.last_shot_time > self.shoot_interval:
-            # 左右の少しズレた位置から2発発射するためのオフセット
-            offsets = [-15, 15]
-            for offset_x in offsets:
-                # 画面内で最も近い敵を取得するメソッドを呼ぶ
-                target: Enemy | None = self.get_nearest_enemy()
-                
-                angle: float = 0.0
-                if target:
-                    # 敵がいる場合：敵の方向への角度(ラジアン)を計算
-                    # atan2(yの差分, xの差分) で角度が求まる
-                    dx = target.rect.centerx - (self.rect.centerx + offset_x)
-                    dy = target.rect.centery - self.rect.top
-                    angle = math.atan2(dy, dx)
-                else:
-                    # 敵がいない場合：真上 (-90度 = -pi/2 ラジアン)
-                    angle = -math.pi / 2
-
-                # 弾速の設定 (ホーミング弾は挙動が見えやすいよう少し遅め)
-                speed: float = 8.0
-                vx: float = math.cos(angle) * speed # 横方向の速度成分
-                vy: float = math.sin(angle) * speed # 縦方向の速度成分
-                
-                # 弾の生成 (お札風の長方形)
-                bullet = Bullet(self.rect.centerx + offset_x, self.rect.top, vy, vx, is_player_bullet=True, color=(255, 50, 50))
-                # 弾の見た目を長方形（お札）に変更
-                bullet.image = pygame.Surface((10, 14))
-                bullet.image.fill(WHITE)           # 背景白
-                pygame.draw.rect(bullet.image, RED, (2, 2, 6, 10)) # 赤い枠線を描く
-                bullet.rect = bullet.image.get_rect(center=(self.rect.centerx + offset_x, self.rect.top))
-                
-                # スプライトグループに追加
-                all_sprites.add(bullet)
-                player_bullets.add(bullet)
-            
-            # 最終発射時間を更新
-            self.last_shot_time = now
-
-    def get_nearest_enemy(self) -> any:
-        """
-        現在画面内にいる敵の中から、自機に最も近い敵を探索して返す。
-        Returns:
-            Enemy | None: 最も近い敵インスタンス。敵がいない場合はNone。
-        """
-        nearest_enemy = None
-        min_dist_sq = float('inf') # 最短距離の記録用（初期値は無限大）
-        
-        # global変数のenemiesグループから探索
-        for enemy in enemies:
-            # まだ画面に出てきていない(y < 0)敵は対象外にする
-            if enemy.rect.top < 0:
-                continue
-
-            # 距離の二乗を計算 (ルート計算を避けて処理を高速化)
-            # 距離^2 = (x1-x2)^2 + (y1-y2)^2
-            dx = enemy.rect.centerx - self.rect.centerx
-            dy = enemy.rect.centery - self.rect.centery
-            dist_sq = dx*dx + dy*dy
-            
-            # これまでの最短距離より近ければ更新
-            if dist_sq < min_dist_sq:
-                min_dist_sq = dist_sq
-                nearest_enemy = enemy
-                
-        # ボス戦中はボスもターゲット候補にする
-        if is_boss_active:
-            for boss in boss_group:
-                 dx = boss.rect.centerx - self.rect.centerx
-                 dy = boss.rect.centery - self.rect.centery
-                 dist_sq = dx*dx + dy*dy
-                 if dist_sq < min_dist_sq:
-                     nearest_enemy = boss
-
-        return nearest_enemy
     
 
 # --- 3. ゲーム初期化 ---
@@ -412,23 +414,11 @@ while running:
                 elif event.key == pygame.K_ESCAPE:
                     running = False
 
-<<<<<<< HEAD
         # ■ キャラ選択画面 (ここを大きく変更)
-=======
-        # ■ キャラ選択画面
-        # elif current_state == GAME_STATE_SELECT:
-        #     if event.type == pygame.KEYDOWN:
-        #         if event.key == pygame.K_LEFT:
-        #             selected_char_idx = 0 # Type A
-        #         if event.key == pygame.K_RIGHT:
-        #             selected_char_idx = 1 # Type B
-        #         if event.key == pygame.K_SPACE or event.key == pygame.K_z:
->>>>>>> C0A24173/Reimu
         elif current_state == GAME_STATE_SELECT:
             if event.type == pygame.KEYDOWN:
                 # ★ 左キー: インデックスを一つ戻す（余り計算でループ）
                 if event.key == pygame.K_LEFT:
-<<<<<<< HEAD
                     selected_char_idx = (selected_char_idx - 1) % len(CHAR_LIST)
                 
                 # ★ 右キー: インデックスを一つ進める（余り計算でループ）
@@ -437,43 +427,17 @@ while running:
                 
                 # 決定
                 elif event.key == pygame.K_SPACE or event.key == pygame.K_z:
-=======
-                    # 0 -> 2 -> 1 -> 0 ... とループさせる
-                    selected_char_idx = (selected_char_idx - 1) % 3 
-                if event.key == pygame.K_RIGHT:
-                    # 0 -> 1 -> 2 -> 0 ... とループさせる
-                    selected_char_idx = (selected_char_idx + 1) % 3
-                
-                if event.key == pygame.K_SPACE or event.key == pygame.K_z:
-                    # ゲーム開始初期化処理
->>>>>>> C0A24173/Reimu
                     all_sprites.empty()
                     enemies.empty()
                     boss_group.empty()
                     player_bullets.empty()
                     enemy_bullets.empty()
                     
-<<<<<<< HEAD
                     # ★ リストからクラスを取り出してインスタンス化
                     # これにより if文の分岐が不要になります
                     PlayerClass = CHAR_LIST[selected_char_idx]["class"]
                     player = PlayerClass()
                     
-=======
-                    # ★ここでクラスを使い分ける
-                    # if selected_char_idx == 0:
-                    #     player = PlayerBalance()
-                    # else:
-                    #     player = PlayerSpeed()
-                        
-                    if selected_char_idx == 0:
-                        player = PlayerBalance()
-                    elif selected_char_idx == 1:
-                        player = PlayerSpeed()
-                    elif selected_char_idx == 2:
-                        player = PlayerReimu() # Reimuを追加
-
->>>>>>> C0A24173/Reimu
                     all_sprites.add(player)
                     
                     score = 0
@@ -546,7 +510,6 @@ while running:
         screen.blit(start_text, (SCREEN_WIDTH//2 - start_text.get_width()//2, SCREEN_HEIGHT//2 + 20))
         screen.blit(quit_text, (SCREEN_WIDTH//2 - quit_text.get_width()//2, SCREEN_HEIGHT//2 + 100))
 
-<<<<<<< HEAD
     elif current_state == GAME_STATE_SELECT:
         sel_title = font.render("キャラクター選択", True, WHITE)
         screen.blit(sel_title, (SCREEN_WIDTH//2 - sel_title.get_width()//2, 80))
@@ -579,82 +542,6 @@ while running:
 
         guide_text = small_font.render("← → で変更 / Z or SPACE で決定", True, YELLOW)
         screen.blit(guide_text, (SCREEN_WIDTH//2 - guide_text.get_width()//2, SCREEN_HEIGHT - 80))
-=======
-    # elif current_state == GAME_STATE_SELECT:
-    #     sel_title = font.render("キャラクター選択", True, WHITE)
-    #     screen.blit(sel_title, (SCREEN_WIDTH//2 - sel_title.get_width()//2, 100))
-        
-        # キャラクターのプレビュー描画（四角形を表示）
-        # Type A
-        # color_a = BLUE if selected_char_idx == 0 else (50, 50, 100)
-        # rect_a = pygame.Rect(SCREEN_WIDTH//2 - 150, SCREEN_HEIGHT//2 - 50, 100, 100)
-        # pygame.draw.rect(screen, color_a, rect_a)
-        # name_a = small_font.render("Type A: バランス", True, WHITE)
-        # screen.blit(name_a, (SCREEN_WIDTH//2 - 150, SCREEN_HEIGHT//2 + 60))
-
-        # # Type B
-        # color_b = RED if selected_char_idx == 1 else (100, 50, 50)
-        # rect_b = pygame.Rect(SCREEN_WIDTH//2 + 50, SCREEN_HEIGHT//2 - 50, 100, 100)
-        # pygame.draw.rect(screen, color_b, rect_b)
-        # name_b = small_font.render("Type B: 高速移動", True, WHITE)
-        # screen.blit(name_b, (SCREEN_WIDTH//2 + 50, SCREEN_HEIGHT//2 + 60))
-    
-        # 選択枠の強調
-        # if selected_char_idx == 0:
-        #     pygame.draw.rect(screen, YELLOW, rect_a, 5)
-        # else:
-        #     pygame.draw.rect(screen, YELLOW, rect_b, 5)
-
-        # guide_text = small_font.render("← → で選択 / Z or SPACE で決定", True, YELLOW)
-        # screen.blit(guide_text, (SCREEN_WIDTH//2 - guide_text.get_width()//2, SCREEN_HEIGHT - 100))
-
-    elif current_state == GAME_STATE_SELECT:
-        sel_title = font.render("キャラクター選択", True, WHITE)
-        screen.blit(sel_title, (SCREEN_WIDTH//2 - sel_title.get_width()//2, 100))
-
-        # ■ Type A: バランス (左)
-        # 座標: 中央から -200 (x=100)
-        color_a = BLUE if selected_char_idx == 0 else (50, 50, 100)
-        rect_a = pygame.Rect(SCREEN_WIDTH//2 - 200, SCREEN_HEIGHT//2 - 50, 100, 100)
-        pygame.draw.rect(screen, color_a, rect_a)
-        # 選択画面で文字が重なってしまうためtypeを省略
-        name_a = small_font.render("バランス", True, WHITE)
-        # 文字を四角形の真ん中に合わせる計算
-        screen.blit(name_a, (rect_a.centerx - name_a.get_width()//2, rect_a.bottom + 10))
-
-
-        # ■ Type B: 高速移動 (中央)
-        # 座標: 中央から -50 (x=250)
-        color_b = RED if selected_char_idx == 1 else (100, 50, 50)
-        rect_b = pygame.Rect(SCREEN_WIDTH//2 - 50, SCREEN_HEIGHT//2 - 50, 100, 100)
-        pygame.draw.rect(screen, color_b, rect_b)
-        # 選択画面で文字が重なってしまうためtypeを省略
-        name_b = small_font.render("高速移動", True, WHITE)
-        screen.blit(name_b, (rect_b.centerx - name_b.get_width()//2, rect_b.bottom + 10))
-
-
-        # ■ Type C: 誘導弾幕 (右)
-        # 座標: 中央から +100 (x=400) 
-        color_c = (200, 50, 50) if selected_char_idx == 2 else (100, 30, 30)
-        rect_c = pygame.Rect(SCREEN_WIDTH//2 + 100, SCREEN_HEIGHT//2 - 50, 100, 100)
-        pygame.draw.rect(screen, color_c, rect_c)
-        # 選択画面で文字が重なってしまうためtypeを省略
-        name_c = small_font.render("誘導弾幕", True, WHITE)
-        screen.blit(name_c, (rect_c.centerx - name_c.get_width()//2, rect_c.bottom + 10))
-        
-        
-        # 選択枠の強調
-        if selected_char_idx == 0:
-            pygame.draw.rect(screen, YELLOW, rect_a, 5)
-        elif selected_char_idx == 1:
-            pygame.draw.rect(screen, YELLOW, rect_b, 5)
-        elif selected_char_idx == 2:
-            pygame.draw.rect(screen, YELLOW, rect_c, 5)
-
-        guide_text = small_font.render("← → で選択 / Z or SPACE で決定", True, YELLOW)
-        screen.blit(guide_text, (SCREEN_WIDTH//2 - guide_text.get_width()//2, SCREEN_HEIGHT - 100))
-        
->>>>>>> C0A24173/Reimu
 
     elif current_state == GAME_STATE_PLAYING:
         all_sprites.draw(screen)
@@ -671,6 +558,8 @@ while running:
                 pygame.draw.rect(screen, WHITE, (100, 20, 400, 20), 2)
                 hp_text = small_font.render(f"Boss HP: {b.hp}", True, WHITE)
                 screen.blit(hp_text, (100, 45))
+
+    
 
     elif current_state == GAME_STATE_GAMEOVER:
         over_text = font.render("ゲームオーバー", True, RED)
