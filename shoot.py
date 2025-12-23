@@ -185,6 +185,48 @@ class PlayerShotgun(Player):
         self.image.fill(GREEN)
         self.speed = 4
         self.shoot_interval = 200
+        image_path = "./fig/shot.png"
+        
+        try:
+            raw_image = pygame.image.load(image_path).convert()
+            
+            # リサイズする
+            target_size = (50, 50)
+            scaled_image = pygame.transform.scale(raw_image, target_size)
+            
+            # 3. アルファ付きに変換
+            self.image = scaled_image.convert_alpha()
+            bg_color = self.image.get_at((0, 0))
+            
+            # 色の許容範囲 (Threshold)
+            # この数値を大きくすると、より広い範囲の色が消えます。
+            threshold = 60 
+            
+            width, height = self.image.get_size()
+            for x in range(width):
+                for y in range(height):
+                    # 現在のピクセルの色を取得
+                    c = self.image.get_at((x, y))
+                    diff = abs(c.r - bg_color.r) + abs(c.g - bg_color.g) + abs(c.b - bg_color.b)
+                    
+                    if diff < threshold:
+                        # 差が許容範囲内なら、完全に透明にする (R,G,B,Alpha)
+                        self.image.set_at((x, y), (0, 0, 0, 0))
+            
+        except FileNotFoundError:
+            print(f"画像ファイル {image_path} が見つかりません。緑色の矩形を使用します。")
+            self.image = pygame.Surface((30, 30))
+            self.image.fill(GREEN)
+        
+        # --- マスクの作成 ---
+        # 透明部分を無視した正確な衝突判定用マスクを作成
+        self.mask = pygame.mask.from_surface(self.image)
+
+        self.rect = self.image.get_rect()
+        self.rect.center = (SCREEN_WIDTH // 2, SCREEN_HEIGHT - 50)
+        
+        self.speed = 4
+        self.shoot_interval = 200
 
     def shoot(self) -> None:
         """
