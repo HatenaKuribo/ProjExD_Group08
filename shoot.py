@@ -46,14 +46,8 @@ class Bullet(pygame.sprite.Sprite):
         引数 color: 弾の色
         """
         super().__init__()
-        
-        # sizeが指定されていなければデフォルト値を使う
-        if size == 0:
-            size = 10 if is_player_bullet else 8
-            
+        size = 10 if is_player_bullet else 8
         self.image = pygame.Surface((size, size))
-        self.is_melee = is_melee # 近接攻撃かどうか
-        self.life = life         # 寿命（フレーム数）。0なら無限（画面外まで）
         
         if is_player_bullet:
             # プレイヤー弾は引数で色を指定可能にする
@@ -70,18 +64,10 @@ class Bullet(pygame.sprite.Sprite):
 
     def update(self) -> None:
         """
-        弾の移動処理と画面外削除、寿命管理
+        弾の移動処理と画面外削除
         """
         self.rect.y += self.vy
         self.rect.x += self.vx
-        
-        # 寿命がある弾（近接攻撃など）の処理
-        if self.life > 0:
-            self.life -= 1
-            if self.life <= 0:
-                self.kill() # 寿命が尽きたら消える
-
-        # 画面外に出たら削除
         if self.rect.bottom < -50 or self.rect.top > SCREEN_HEIGHT + 50 or \
            self.rect.left < -50 or self.rect.right > SCREEN_WIDTH + 50:
             self.kill()
@@ -197,6 +183,48 @@ class PlayerShotgun(Player):
         """
         super().__init__()
         self.image.fill(GREEN)
+        self.speed = 4
+        self.shoot_interval = 200
+        image_path = "./fig/shot.png"
+        
+        try:
+            raw_image = pygame.image.load(image_path).convert()
+            
+            # リサイズする
+            target_size = (50, 50)
+            scaled_image = pygame.transform.scale(raw_image, target_size)
+            
+            # 3. アルファ付きに変換
+            self.image = scaled_image.convert_alpha()
+            bg_color = self.image.get_at((0, 0))
+            
+            # 色の許容範囲 (Threshold)
+            # この数値を大きくすると、より広い範囲の色が消えます。
+            threshold = 60 
+            
+            width, height = self.image.get_size()
+            for x in range(width):
+                for y in range(height):
+                    # 現在のピクセルの色を取得
+                    c = self.image.get_at((x, y))
+                    diff = abs(c.r - bg_color.r) + abs(c.g - bg_color.g) + abs(c.b - bg_color.b)
+                    
+                    if diff < threshold:
+                        # 差が許容範囲内なら、完全に透明にする (R,G,B,Alpha)
+                        self.image.set_at((x, y), (0, 0, 0, 0))
+            
+        except FileNotFoundError:
+            print(f"画像ファイル {image_path} が見つかりません。緑色の矩形を使用します。")
+            self.image = pygame.Surface((30, 30))
+            self.image.fill(GREEN)
+        
+        # --- マスクの作成 ---
+        # 透明部分を無視した正確な衝突判定用マスクを作成
+        self.mask = pygame.mask.from_surface(self.image)
+
+        self.rect = self.image.get_rect()
+        self.rect.center = (SCREEN_WIDTH // 2, SCREEN_HEIGHT - 50)
+        
         self.speed = 4
         self.shoot_interval = 200
 
@@ -316,69 +344,6 @@ class PlayerReimu(Player):
         return nearest_enemy
     
 
-class PlayerMelee(Player):
-    """Type D: 近接型"""
-    def __init__(self):
-        super().__init__()
-        # 画像読み込み（なければ四角形で代用）
-        try:
-            image_path = "./fig/Gemini_Generated_Image_5a8oni5a8oni5a8o.png"
-            if os.path.exists(image_path):
-                original_image = pygame.image.load(image_path).convert_alpha()
-                # 簡易的な背景透過処理（白っぽい部分を透過）
-                threshold = 200
-                width, height = original_image.get_size()
-                original_image.lock()
-                for x in range(width):
-                    for y in range(height):
-                        r, g, b, a = original_image.get_at((x, y))
-                        if r > threshold and g > threshold and b > threshold:
-                            original_image.set_at((x, y), (255, 255, 255, 0))
-                original_image.unlock()
-                
-                rect = original_image.get_bounding_rect()
-                if rect.width > 0 and rect.height > 0:
-                    cropped_image = original_image.subsurface(rect)
-                    self.image = pygame.transform.smoothscale(cropped_image, (50, 50))
-                else:
-                    self.image = pygame.transform.smoothscale(original_image, (50, 50))
-            else:
-                raise FileNotFoundError
-        except Exception as e:
-            # 画像がない場合は黄色い四角
-            self.image = pygame.Surface((40, 40))
-            self.image.fill(YELLOW)
-            
-        self.rect = self.image.get_rect()
-        self.rect.center = (SCREEN_WIDTH // 2, SCREEN_HEIGHT - 50)
-
-        self.speed = 6
-        self.shoot_interval = 15 # 連射速度速い（近接攻撃）
-        
-        self.special_gauge = 100
-        self.special_max = 100
-        self.special_charge_rate = 0.15
-
-    def shoot(self):
-        now = pygame.time.get_ticks()
-        if now - self.last_shot_time > self.shoot_interval:
-            # 近接攻撃（剣を振るイメージの短射程・高威力弾）
-            # is_melee=True を指定して、敵弾を消せるようにする
-            
-            # 中央
-            bullet = Bullet(self.rect.centerx, self.rect.top, -15, 0, 
-                            is_player_bullet=True, color=YELLOW, size=20, life=15, is_melee=True)
-            # 左
-            bullet_l = Bullet(self.rect.centerx - 15, self.rect.top + 10, -15, -2, 
-                            is_player_bullet=True, color=YELLOW, size=15, life=10, is_melee=True)
-            # 右
-            bullet_r = Bullet(self.rect.centerx + 15, self.rect.top + 10, -15, 2, 
-                            is_player_bullet=True, color=YELLOW, size=15, life=10, is_melee=True)
-
-            all_sprites.add(bullet, bullet_l, bullet_r)
-            player_bullets.add(bullet, bullet_l, bullet_r)
-            self.last_shot_time = now
-
 class PlayerSwitch(Player):
     """
     Type C: 射撃モード切替型
@@ -426,9 +391,8 @@ CHAR_LIST = [
     {"name": "Type A: Balance", "desc": "バランス型", "color": BLUE,  "class": PlayerBalance},
     {"name": "Type B: Speed",   "desc": "高速移動型", "color": RED,   "class": PlayerSpeed},
     {"name": "Type C: Shotgun", "desc": "広範囲攻撃", "color": GREEN, "class": PlayerShotgun},
-    {"name": "Type D: Melee",   "desc": "近接斬撃(弾消し)", "color": YELLOW, "class": PlayerMelee},
-    {"name": "Type E: Reimu", "desc": "誘導弾幕", "color": WHITE, "class": PlayerReimu},
-    {"name": "Type F: Switch", "desc": "射撃切替", "color": PURPLE, "class": PlayerSwitch},
+    {"name": "Type D: Reimu", "desc": "誘導弾幕", "color": WHITE, "class": PlayerReimu},
+    {"name": "Type E: Switch", "desc": "射撃切替", "color": YELLOW, "class": PlayerSwitch},
     # 例: {"name": "Type D: Power", "desc": "高火力", "color": PURPLE, "class": PlayerPower}, 
 ]
 
@@ -670,21 +634,6 @@ while running:
         hits = pygame.sprite.groupcollide(enemies, player_bullets, True, True)
         for hit in hits:
             score += 10
-        # ★追加: 近接攻撃(is_melee=True) vs 敵弾 の相殺処理
-        # 1. まずプレイヤー弾の中から is_melee が True のものだけを抽出
-        melee_bullets = [b for b in player_bullets if hasattr(b, 'is_melee') and b.is_melee]
-        
-        # 2. 抽出した近接弾と、敵弾グループの衝突判定
-        #    False, True なので、近接弾は消えず(貫通)、敵弾だけ消える設定です
-        if melee_bullets:
-            # groupcollideはGroup同士である必要があるため、一時的なGroupを作るか、
-            # あるいは spritecollide でループ回すのが簡単です
-            for melee in melee_bullets:
-                # 敵弾と接触したら、敵弾(True)を消す
-                pygame.sprite.spritecollide(melee, enemy_bullets, True)
-                
-                # ボス弾幕も消したい場合はここに追加
-                # pygame.sprite.spritecollide(melee, boss_bullets, True) # boss_bulletsグループがあれば    
 
         if is_boss_active:
             boss_hits = pygame.sprite.groupcollide(boss_group, player_bullets, False, True)
@@ -763,8 +712,6 @@ while running:
                 pygame.draw.rect(screen, WHITE, (100, 20, 400, 20), 2)
                 hp_text = small_font.render(f"Boss HP: {b.hp}", True, WHITE)
                 screen.blit(hp_text, (100, 45))
-
-    
 
     elif current_state == GAME_STATE_GAMEOVER:
         over_text = font.render("ゲームオーバー", True, RED)
