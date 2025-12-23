@@ -35,10 +35,12 @@ os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 class Bullet(pygame.sprite.Sprite):
     """弾クラス"""
-    def __init__(self, x, y, vy, vx=0, is_player_bullet=True, color=WHITE):
+    def __init__(self, x, y, vy, vx=0, is_player_bullet=True, color=WHITE, pierce=False, damage=1):  # 貫通判定、ダメージを追加:
         super().__init__()
         size = 10 if is_player_bullet else 8
         self.image = pygame.Surface((size, size))
+        self.damage = damage
+        self.pierce = pierce
         
         if is_player_bullet:
             # プレイヤー弾は引数で色を指定可能にする
@@ -87,6 +89,10 @@ class Player(pygame.sprite.Sprite):
         if keys[pygame.K_DOWN] and self.rect.bottom < SCREEN_HEIGHT:
             self.rect.y += current_speed
 
+        # if keys[pygame.K_z]:
+        #     self.shoot()
+        self.shoot()
+
     def shoot(self):
         """子クラスでオーバーライド（上書き）するためのメソッド"""
         pass
@@ -134,6 +140,67 @@ class PlayerSpeed(Player):
                 all_sprites.add(bullet)
                 player_bullets.add(bullet)
             self.last_shot_time = now
+
+class PlayerCharge(Player):
+    """Type C: チャージショット型（黄）"""
+    def __init__(self):
+        super().__init__()
+        self.image.fill(YELLOW)
+        self.speed = 5
+
+        # チャージ関連
+        self.is_charging = False
+        self.charge_time = 0
+        self.max_charge = 120  # フレーム上限
+
+    def shoot(self):
+        keys = pygame.key.get_pressed()
+
+        # Zキーが押されている間：チャージ
+        if keys[pygame.K_z]:
+            self.is_charging = True
+            self.charge_time = min(self.charge_time + 1, self.max_charge)
+
+        # Zキーを離した瞬間：発射
+        elif self.is_charging:
+            # 発射処理
+            power = self.charge_time
+            self.is_charging = False
+            self.charge_time = 0
+
+            #チャージ時間に応じて弾の性能を変える
+            damage = 1 + power // 5
+            size = 10 + power // 5
+            speed = 8 + power // 5
+
+            bullet_centers = [0, -15, 15]
+            for angle in bullet_centers:
+                rad = math.radians(angle)
+                vx = math.sin(rad) * speed
+                vy = -math.cos(rad) * speed
+                
+                bullet = Bullet(
+                    self.rect.centerx,
+                    self.rect.top,
+                    vy=vy,
+                    vx=vx,
+                    is_player_bullet=True,
+                    color=YELLOW,
+                    pierce=True,
+                    damage=damage
+                )
+
+            # 見た目強化（サイズ変更）
+                bullet.image = pygame.Surface((size, size))
+                bullet.image.fill(YELLOW)
+                bullet.rect = bullet.image.get_rect(center=bullet.rect.center)
+
+                all_sprites.add(bullet)
+                player_bullets.add(bullet)
+
+                # リセット
+                self.is_charging = False
+                self.charge_time = 0
 
 class Enemy(pygame.sprite.Sprite):
     """ザコ敵クラス"""
@@ -280,11 +347,12 @@ while running:
         # ■ キャラ選択画面
         elif current_state == GAME_STATE_SELECT:
             if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_LEFT:
-                    selected_char_idx = 0 # Type A
-                if event.key == pygame.K_RIGHT:
-                    selected_char_idx = 1 # Type B
-                if event.key == pygame.K_SPACE or event.key == pygame.K_z:
+               if event.key == pygame.K_LEFT:
+                   selected_char_idx = (selected_char_idx - 1) % len(characters)
+               elif event.key == pygame.K_RIGHT:
+                   selected_char_idx = (selected_char_idx + 1) % len(characters)
+
+               elif event.key == pygame.K_SPACE or event.key == pygame.K_z:
                     # ゲーム開始初期化処理
                     all_sprites.empty()
                     enemies.empty()
@@ -295,8 +363,10 @@ while running:
                     # ★ここでクラスを使い分ける
                     if selected_char_idx == 0:
                         player = PlayerBalance()
-                    else:
+                    elif selected_char_idx ==1:
                         player = PlayerSpeed()
+                    elif selected_char_idx == 2:
+                        player = PlayerCharge()
                         
                     all_sprites.add(player)
                     
@@ -305,7 +375,7 @@ while running:
                     boss_level = 1
                     is_boss_active = False
                     current_state = GAME_STATE_PLAYING
-                if event.key == pygame.K_ESCAPE:
+               elif event.key == pygame.K_ESCAPE:
                     current_state = GAME_STATE_TITLE # 戻る
 
         # ■ ゲームオーバー画面
@@ -316,8 +386,9 @@ while running:
     # --- 更新処理 ---
     if current_state == GAME_STATE_PLAYING:
         keys = pygame.key.get_pressed()
-        if keys[pygame.K_z]:
-            player.shoot()
+        # if keys[pygame.K_z]:
+        #     player.shoot()
+
 
         if not is_boss_active and score >= next_boss_score:
             is_boss_active = True
@@ -337,15 +408,18 @@ while running:
         
         all_sprites.update()
 
-        hits = pygame.sprite.groupcollide(enemies, player_bullets, True, True)
-        for hit in hits:
+        hits = pygame.sprite.groupcollide(enemies, player_bullets, True, False) #弾はいったん消さない
+        for enemy, bullets in hits.items():
             score += 10
+            for bullet in bullets:
+                if not getattr(bullet, "pierce", False):
+                    bullet.kill()
 
         if is_boss_active:
             boss_hits = pygame.sprite.groupcollide(boss_group, player_bullets, False, True)
             for boss_sprite, bullets in boss_hits.items():
                 for b in bullets:
-                    boss_sprite.hp -= 1
+                    boss_sprite.hp -= b.damage
                     score += 1
                 if boss_sprite.hp <= 0:
                     score += 1000
@@ -373,31 +447,47 @@ while running:
     elif current_state == GAME_STATE_SELECT:
         sel_title = font.render("キャラクター選択", True, WHITE)
         screen.blit(sel_title, (SCREEN_WIDTH//2 - sel_title.get_width()//2, 100))
-        
-        # キャラクターのプレビュー描画（四角形を表示）
-        # Type A
-        color_a = BLUE if selected_char_idx == 0 else (50, 50, 100)
-        rect_a = pygame.Rect(SCREEN_WIDTH//2 - 150, SCREEN_HEIGHT//2 - 50, 100, 100)
-        pygame.draw.rect(screen, color_a, rect_a)
-        name_a = small_font.render("Type A: バランス", True, WHITE)
-        screen.blit(name_a, (SCREEN_WIDTH//2 - 150, SCREEN_HEIGHT//2 + 60))
 
-        # Type B
-        color_b = RED if selected_char_idx == 1 else (100, 50, 50)
-        rect_b = pygame.Rect(SCREEN_WIDTH//2 + 50, SCREEN_HEIGHT//2 - 50, 100, 100)
-        pygame.draw.rect(screen, color_b, rect_b)
-        name_b = small_font.render("Type B: 高速移動", True, WHITE)
-        screen.blit(name_b, (SCREEN_WIDTH//2 + 50, SCREEN_HEIGHT//2 + 60))
-        
-        # 選択枠の強調
-        if selected_char_idx == 0:
-            pygame.draw.rect(screen, YELLOW, rect_a, 5)
-        else:
-            pygame.draw.rect(screen, YELLOW, rect_b, 5)
+    # キャラ定義（増やすのはここだけ）
+        characters = [
+            {"name": "Type A: バランス", "color": BLUE},
+            {"name": "Type B: 高速移動", "color": RED},
+            {"name": "Type C: チャージ", "color": YELLOW},
+        ]
 
-        guide_text = small_font.render("← → で選択 / Z or SPACE で決定", True, YELLOW)
-        screen.blit(guide_text, (SCREEN_WIDTH//2 - guide_text.get_width()//2, SCREEN_HEIGHT - 100))
+        base_x = SCREEN_WIDTH // 2
+        y = SCREEN_HEIGHT // 2 - 50
+        spacing = 140  # キャラ間隔
 
+        for i, char in enumerate(characters):
+            x = base_x + (i - 1) * spacing
+
+        # 選択中かどうかで色を変える
+            if selected_char_idx == i:
+                color = char["color"]
+            else:
+                color = tuple(c // 2 for c in char["color"])
+
+            rect = pygame.Rect(x, y, 100, 100)
+            pygame.draw.rect(screen, color, rect)
+
+        # 枠線（選択中）
+            if selected_char_idx == i:
+                pygame.draw.rect(screen, YELLOW, rect, 5)
+
+        # 名前
+            name_text = small_font.render(char["name"], True, WHITE)
+            screen.blit(name_text, (x, y + 110))
+
+        guide_text = small_font.render(
+        "← → で選択 / Z or SPACE で決定",
+            True,
+            YELLOW
+        )
+        screen.blit(
+            guide_text,
+            (SCREEN_WIDTH//2 - guide_text.get_width()//2, SCREEN_HEIGHT - 100)
+        )
     elif current_state == GAME_STATE_PLAYING:
         all_sprites.draw(screen)
         score_text = small_font.render(f"スコア: {score}", True, WHITE)
